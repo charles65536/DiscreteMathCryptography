@@ -1,6 +1,6 @@
 import random
 from math import gcd
-
+import string
 def is_prime(n):
     if n < 2:
         return False
@@ -50,33 +50,65 @@ def find_block_size(plaintext, n):
             return size
     return 1
 
-def encrypt(public_key, plaintext):
-    e, n = public_key
-    block_size = find_block_size(plaintext, n)
-    cipher = []
+def insert_random_letters(s):
+    result = []
+    for i in range(0, len(s), 2):
+        chunk = s[i:i+2]
+        result.append(chunk)
+        if i + 2 < len(s):  
+            rand_char = random.choice(string.ascii_letters)
+            result.append(rand_char)
+    return ''.join(result)
 
+def recover_original_from_inserted(s):
+    result = []
+    for i in range(0, len(s), 3):
+        chunk = s[i:i+2]  
+        result.append(chunk)
+    return ''.join(result)
+
+
+def encrypt(public_keys, plaintext):
+    plaintext = insert_random_letters(plaintext)
+    min_n = min(n for e, n in public_keys)
+    block_size = find_block_size(plaintext, min_n)
+
+    cipher = []
     for i in range(0, len(plaintext), block_size):
         block = plaintext[i:i + block_size]
+        key_index = (i // block_size) % len(public_keys)
+        e, n = public_keys[key_index]
         block_num = int(''.join(f"{ord(c):03}" for c in block))
-        cipher.append(pow(block_num, e, n))
+        cipher.append(pow(block_num, e, n)) 
 
     return cipher, block_size
 
-def decrypt(private_key, ciphertext, block_size):
-    d, n = private_key
+
+
+def decrypt(private_keys, ciphertext, block_size):
     plaintext = ""
 
-    for c in ciphertext:
+    for i, c in enumerate(ciphertext):
+        key_index = i % len(private_keys)
+        d, n = private_keys[key_index]
         num = pow(c, d, n)
         block_str = str(num).zfill(3 * block_size)
         chars = [chr(int(block_str[i:i+3])) for i in range(0, len(block_str), 3)]
         plaintext += ''.join(chars)
 
-    return plaintext
+    return recover_original_from_inserted(plaintext)
+
+
 
 if __name__ == "__main__":
-    p, q = 1009, 1013
-    public_key, private_key = generate_keypair(p, q)
+    pq_list = [(1009, 1013), (1031, 1033), (1061, 1063)]
+    public_keys = []
+    private_keys = []
+
+    for p, q in pq_list:
+        pub, priv = generate_keypair(p, q)
+        public_keys.append(pub)
+        private_keys.append(priv)
 
     message = (
         "In the field of cryptography, RSA is one of the first public-key cryptosystems and is widely used "
@@ -86,9 +118,10 @@ if __name__ == "__main__":
         "to everyone, and a private key, which is known only to the recipient of the message."
     )
 
-    encrypted, block_size = encrypt(public_key, message)
+    encrypted, block_size = encrypt(public_keys, message)
     print("block_size:", block_size)
     print("encrypted:", encrypted)
 
-    decrypted = decrypt(private_key, encrypted, block_size)
+    decrypted = decrypt(private_keys, encrypted, block_size)
     print("decrypted:", decrypted)
+
