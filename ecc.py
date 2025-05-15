@@ -122,7 +122,9 @@ if __name__ == "__main__":
         p, a, b, G, n = params['p'], params['a'], params['b'], params['G'], params['n']
 
         # Key generation
+        t = time.time()
         priv, pub = generate_key_pair(G, n, a, p)
+        t_gen = time.time() - t
 
         # Encryption
         t0 = time.time()
@@ -134,10 +136,8 @@ if __name__ == "__main__":
         dec = ecc_decrypt(enc, priv, a, p)
         t_dec = time.time() - t1
 
-        # Save decrypted result
-        with open(f"decrypted_{name.replace('-', '')}.txt", "wb") as f:
-            f.write(dec)
-
+        # Result
+        print("Decrypted text:", dec.decode('utf-8'))
+        print(f"Generation time: {t_gen:.6f} seconds")
         print(f"Encryption time: {t_enc:.6f} seconds")
         print(f"Decryption time: {t_dec:.6f} seconds")
-        #print(f"Decrypted content saved to decrypted_{name.replace('-', '')}.txt")
