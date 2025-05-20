@@ -1,8 +1,26 @@
+"""
+Elliptic Curve Cryptography (ECC) Implementation
+
+This module implements Elliptic Curve Cryptography operations including:
+- Point addition and scalar multiplication on elliptic curves
+- Key pair generation
+- Encryption and decryption using ECC
+- Support for multiple NIST curves (P-192, P-224, P-256, P-384, P-521)
+
+The implementation follows the ECC algorithm:
+1. Choose an elliptic curve and a base point G
+2. Generate a private key (random number) and corresponding public key
+3. Use the public key for encryption and private key for decryption
+
+Author: [Your Name]
+Date: [Current Date]
+"""
+
 import hashlib
 import random
 import time
 
-# Various NIST curve parameters
+# NIST curve parameters for various security levels
 curves = {
     'P-192': {
         'p': 0xfffffffffffffffffffffffffffffffeffffffffffffffff,
@@ -56,10 +74,43 @@ curves = {
     }
 }
 
-def mod_inverse(a, m):
+def mod_inverse(a: int, m: int) -> int:
+    """
+    Calculate the modular multiplicative inverse using Fermat's Little Theorem.
+    
+    Args:
+        a (int): The number to find the inverse of
+        m (int): The modulus (must be prime)
+        
+    Returns:
+        int: The modular multiplicative inverse of a modulo m
+        
+    Note:
+        This implementation assumes m is prime and uses Fermat's Little Theorem:
+        a^(m-1) ≡ 1 (mod m) => a^(m-2) ≡ a^(-1) (mod m)
+    """
     return pow(a, m - 2, m)
 
-def point_add(P, Q, a, p):
+def point_add(P: tuple, Q: tuple, a: int, p: int) -> tuple:
+    """
+    Add two points on an elliptic curve.
+    
+    Args:
+        P (tuple): First point (x1, y1)
+        Q (tuple): Second point (x2, y2)
+        a (int): Curve parameter a
+        p (int): Prime modulus
+        
+    Returns:
+        tuple: Resulting point (x3, y3)
+        
+    Note:
+        Implements the elliptic curve point addition formula:
+        - If P = O (point at infinity), return Q
+        - If Q = O, return P
+        - If P = -Q, return O
+        - Otherwise, use the standard point addition formulas
+    """
     if P == (0, 0): return Q
     if Q == (0, 0): return P
     x1, y1 = P
@@ -72,7 +123,26 @@ def point_add(P, Q, a, p):
     y3 = (l * (x1 - x3) - y1) % p
     return (x3, y3)
 
-def scalar_multiply(k, P, a, p):
+def scalar_multiply(k: int, P: tuple, a: int, p: int) -> tuple:
+    """
+    Multiply a point on an elliptic curve by a scalar using the double-and-add algorithm.
+    
+    Args:
+        k (int): Scalar multiplier
+        P (tuple): Point to multiply (x, y)
+        a (int): Curve parameter a
+        p (int): Prime modulus
+        
+    Returns:
+        tuple: Resulting point kP
+        
+    Note:
+        Implements the double-and-add algorithm for efficient scalar multiplication:
+        1. Start with result = O (point at infinity)
+        2. For each bit in k:
+           - Double the result
+           - If bit is 1, add P to result
+    """
     R = (0, 0)
     while k:
         if k & 1:
@@ -81,12 +151,40 @@ def scalar_multiply(k, P, a, p):
         k >>= 1
     return R
 
-def generate_key_pair(G, n, a, p):
+def generate_key_pair(G: tuple, n: int, a: int, p: int) -> tuple:
+    """
+    Generate an ECC key pair.
+    
+    Args:
+        G (tuple): Base point (generator)
+        n (int): Order of the base point
+        a (int): Curve parameter a
+        p (int): Prime modulus
+        
+    Returns:
+        tuple: (private_key, public_key) where:
+            - private_key is a random integer in [1, n-1]
+            - public_key is the point private_key * G
+    """
     priv = random.randint(1, n - 1)
     pub = scalar_multiply(priv, G, a, p)
     return priv, pub
 
-def derive_xor_key(shared_point, length):
+def derive_xor_key(shared_point: tuple, length: int) -> bytes:
+    """
+    Derive a symmetric key from a shared point using SHA-256.
+    
+    Args:
+        shared_point (tuple): The shared point (x, y)
+        length (int): Desired key length in bytes
+        
+    Returns:
+        bytes: Derived key of specified length
+        
+    Note:
+        Uses the x-coordinate of the shared point to generate a key
+        through repeated hashing with SHA-256
+    """
     x_bytes = shared_point[0].to_bytes((shared_point[0].bit_length() + 7) // 8, 'big')
     hash_bytes = hashlib.sha256(x_bytes).digest()
     while len(hash_bytes) < length:
@@ -94,9 +192,41 @@ def derive_xor_key(shared_point, length):
     return hash_bytes[:length]
 
 def xor_data(data: bytes, key: bytes) -> bytes:
+    """
+    Perform XOR operation between data and key.
+    
+    Args:
+        data (bytes): Data to encrypt/decrypt
+        key (bytes): Key to use for XOR operation
+        
+    Returns:
+        bytes: Result of XOR operation
+    """
     return bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
 
-def ecc_encrypt(message: bytes, pubkey, G, n, a, p):
+def ecc_encrypt(message: bytes, pubkey: tuple, G: tuple, n: int, a: int, p: int) -> dict:
+    """
+    Encrypt a message using ECC.
+    
+    Args:
+        message (bytes): Message to encrypt
+        pubkey (tuple): Recipient's public key
+        G (tuple): Base point
+        n (int): Order of the base point
+        a (int): Curve parameter a
+        p (int): Prime modulus
+        
+    Returns:
+        dict: {
+            'ephemeral_pub': ephemeral public key,
+            'ciphertext': encrypted message
+        }
+        
+    Note:
+        Uses ephemeral key pair for each encryption to ensure
+        semantic security (same message encrypted twice produces
+        different ciphertexts)
+    """
     ephemeral_priv, ephemeral_pub = generate_key_pair(G, n, a, p)
     shared_point = scalar_multiply(ephemeral_priv, pubkey, a, p)
     key = derive_xor_key(shared_point, len(message))
@@ -106,7 +236,26 @@ def ecc_encrypt(message: bytes, pubkey, G, n, a, p):
         'ciphertext': ciphertext
     }
 
-def ecc_decrypt(bundle, privkey, a, p):
+def ecc_decrypt(bundle: dict, privkey: int, a: int, p: int) -> bytes:
+    """
+    Decrypt a message using ECC.
+    
+    Args:
+        bundle (dict): {
+            'ephemeral_pub': ephemeral public key,
+            'ciphertext': encrypted message
+        }
+        privkey (int): Recipient's private key
+        a (int): Curve parameter a
+        p (int): Prime modulus
+        
+    Returns:
+        bytes: Decrypted message
+        
+    Note:
+        Uses the recipient's private key and the ephemeral public key
+        to derive the same shared point used in encryption
+    """
     ephemeral_pub = bundle['ephemeral_pub']
     ciphertext = bundle['ciphertext']
     shared_point = scalar_multiply(privkey, ephemeral_pub, a, p)
@@ -114,29 +263,31 @@ def ecc_decrypt(bundle, privkey, a, p):
     return xor_data(ciphertext, key)
 
 if __name__ == "__main__":
+    # Read input message
     with open("input.txt", "rb") as f:
         plaintext = f.read()
 
+    # Test each NIST curve
     for name, params in curves.items():
         print(f"\nTesting Curve: {name}")
         p, a, b, G, n = params['p'], params['a'], params['b'], params['G'], params['n']
 
-        # Key generation
+        # Measure key generation time
         t = time.time()
         priv, pub = generate_key_pair(G, n, a, p)
         t_gen = time.time() - t
 
-        # Encryption
+        # Measure encryption time
         t0 = time.time()
         enc = ecc_encrypt(plaintext, pub, G, n, a, p)
         t_enc = time.time() - t0
 
-        # Decryption
+        # Measure decryption time
         t1 = time.time()
         dec = ecc_decrypt(enc, priv, a, p)
         t_dec = time.time() - t1
 
-        # Result
+        # Display results
         print("Decrypted text:", dec.decode('utf-8'))
         print(f"Generation time: {t_gen:.6f} seconds")
         print(f"Encryption time: {t_enc:.6f} seconds")
