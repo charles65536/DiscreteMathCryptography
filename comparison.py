@@ -13,8 +13,7 @@ The comparison includes:
 Test cases use different key sizes (512, 1024, 2048 bits) with multiple trials
 to ensure statistical significance.
 
-Author: [Your Name]
-Date: [Current Date]
+
 """
 
 import random
